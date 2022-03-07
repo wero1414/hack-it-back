@@ -24,3 +24,7 @@ fp-info-cache
 # Exported BOM files
 *.xml
 *.csv
+
+sensor-board/sensor-board-backups/
+
+main-board/main-board-backups/
