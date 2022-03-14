@@ -28,3 +28,7 @@ fp-info-cache
 sensor-board/sensor-board-backups/
 
 main-board/main-board-backups/
+
+sensor-co2/sensor-co2-backups/
+
+sensor-exp/sensor-exp-backups/
