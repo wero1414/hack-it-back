@@ -32,3 +32,11 @@ main-board/main-board-backups/
 sensor-co2/sensor-co2-backups/
 
 sensor-exp/sensor-exp-backups/
+
+Hw/main-board/main-board-backups/
+
+Hw/sensor-board/sensor-board-backups/
+
+Hw/sensor-co2/sensor-co2-backups/
+
+*.kicad_sch-bak
