@@ -1,9 +1,25 @@
 #include <ArduinoBLE.h>
 
-String addressRead[5];
+#define zeroCross 15
+#define triacOutput 2
+
+#define nodesToRead 5
+#define DEBUG
+
+String addressRead[nodesToRead];
 int i=0;
+bool scanFlag=0;
+
+long previousMillis = 0;  // last time the battery level was checked, in ms
+int peripheralCounter=0;
+
+void zeroCrossISR();
 
 void setup() {
+  pinMode(triacOutput, OUTPUT);
+  pinMode(zeroCross, INPUT);
+  attachInterrupt(zeroCross, zeroCrossISR, RISING);
+  
   Serial.begin(115200);
   while (!Serial);
 
@@ -14,42 +30,67 @@ void setup() {
   }
 
   Serial.println("Bluetooth® Low Energy Central - Peripheral Explorer");
-
-  // start scanning for peripherals
   BLE.scan();
 }
 
 void loop() {
-  // check if a peripheral has been discovered
-  BLEDevice peripheral = BLE.available();
-  
-  if (peripheral) {
-    // discovered a peripheral, print out address, local name, and advertised service
-    Serial.print("Found ");
-    Serial.print(peripheral.address());
-    Serial.print(" '");
-    Serial.print(peripheral.localName());
-    Serial.print("' ");
-    Serial.print(peripheral.advertisedServiceUuid());
-    Serial.println();
-
-    // see if peripheral is a LED
-    if (peripheral.localName() == "BatteryMonitor") {
-      String actualAddress = peripheral.address();
-      bool peripheralRepeted=0;
-      for(int a=0;a<3;a++){
-         if(actualAddress.equals(addressRead[a]))peripheralRepeted=1;
-        }
-      // stop scanning
-      if(!peripheralRepeted){
+  //Check every 5 min all the nodes
+  long currentMillis = millis();
+  if (currentMillis - previousMillis >= 5000) {
+    Serial.println("5 seconds");
+    peripheralCounter=0;
+    previousMillis = currentMillis;
+    for(int i=0;i<nodesToRead;i++){
         BLE.stopScan();
-        addressRead[i]=peripheral.address();
-        explorerPeripheral(peripheral);
-        i++;
+        addressRead[i]="";
         BLE.scan();
+        scanFlag=1;
+    }
+  }
+
+  if(scanFlag){
+    // check if a peripheral has been discovered
+    BLEDevice peripheral = BLE.available();
+    
+    if (peripheral) {
+      // see if peripheral is a LED
+      if (peripheral.localName() == "Hack it back") {
+        #ifdef DEBUG
+        Serial.print("Found ");
+        Serial.print(peripheral.address());
+        Serial.print(" '");
+        Serial.print(peripheral.localName());
+        Serial.print("' ");
+        Serial.print(peripheral.advertisedServiceUuid());
+        Serial.println();
+        #endif
+        
+        String actualAddress = peripheral.address();
+        bool peripheralRepeted=0;
+        for(int a=0;a<nodesToRead;a++){
+           if(actualAddress.equals(addressRead[a])){
+            peripheralRepeted=1;
+            peripheralCounter++;
+            if(peripheralCounter==nodesToRead)scanFlag=0;
+           }
+          }
+        // stop scanning
+        if(!peripheralRepeted){
+          BLE.stopScan();
+          addressRead[i]=peripheral.address();
+          explorerPeripheral(peripheral);
+          i++;
+          BLE.scan();
+        }
       }
     }
   }
+}
+
+void zeroCrossISR(){ //8.33mS 
+  digitalWrite(triacOutput, LOW);
+  //delayMicroseconds(4000); //Check Timeout BLE
+  digitalWrite(triacOutput, HIGH);
 }
 
 void explorerPeripheral(BLEDevice peripheral) {
