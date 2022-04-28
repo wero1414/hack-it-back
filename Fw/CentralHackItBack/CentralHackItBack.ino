@@ -1,32 +1,15 @@
-/*
-  Peripheral Explorer
-
-  This example scans for Bluetooth® Low Energy peripherals until one with a particular name ("LED")
-  is found. Then connects, and discovers + prints all the peripheral's attributes.
-
-  The circuit:
-  - Arduino MKR WiFi 1010, Arduino Uno WiFi Rev2 board, Arduino Nano 33 IoT,
-    Arduino Nano 33 BLE, or Arduino Nano 33 BLE Sense board.
-
-  You can use it with another board that is compatible with this library and the
-  Peripherals -> LED example.
-
-  This example code is in the public domain.
-*/
-
 #include <ArduinoBLE.h>
 
-String addressRead[3]={"","",""};
+String addressRead[5];
 int i=0;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial);
 
   // begin initialization
   if (!BLE.begin()) {
     Serial.println("starting Bluetooth® Low Energy module failed!");
-
     while (1);
   }
 
