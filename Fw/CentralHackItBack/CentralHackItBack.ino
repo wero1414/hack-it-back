@@ -9,11 +9,11 @@
 BLEDevice peripheral;
 
 String addressRead[nodesToRead];
-int i=0;
-bool scanFlag=0;
+int i = 0;
+bool scanFlag = 0;
 
 long previousMillis = 0;  // last time the battery level was checked, in ms
-int peripheralCounter=0;
+int peripheralCounter = 0;
 
 void zeroCrossISR();
 
@@ -21,7 +21,7 @@ void setup() {
   pinMode(triacOutput, OUTPUT);
   //pinMode(zeroCross, INPUT);
   //attachInterrupt(zeroCross, zeroCrossISR, RISING);
-  
+
   Serial.begin(115200);
   while (!Serial);
 
@@ -37,64 +37,66 @@ void setup() {
 
 void loop() {
   //Check every 5 min all the nodes
-  BLE.poll();
+  //BLE.poll();
   long currentMillis = millis();
   if (currentMillis - previousMillis >= 5000) {
     Serial.println("5 seconds");
-    peripheralCounter=0;
+    peripheralCounter = 0;
     previousMillis = currentMillis;
-    for(int i=0;i<nodesToRead;i++){
-        BLE.stopScan();
-        addressRead[i]="";
-        //BLE.scan();
-        scanFlag=1;
+    for (int i = 0; i < nodesToRead; i++) {
+      //BLE.stopScan();
+      addressRead[i] = "";
+      //BLE.scan();
+      scanFlag = 1;
     }
-    BLE.scan();
+    //BLE.scan();
   }
 
-  if(scanFlag){
+  if (scanFlag) {
     // check if a peripheral has been discovered
     peripheral = BLE.available();
-    
+
     if (peripheral) {
+#ifdef DEBUG
+      Serial.print("Found ");
+      Serial.print(peripheral.address());
+      Serial.print(" '");
+      Serial.print(peripheral.localName());
+      Serial.print("' ");
+      Serial.print(peripheral.advertisedServiceUuid());
+      Serial.println();
+#endif
+
       // see if peripheral is a LED
       if (peripheral.localName() == "Hack it back") {
-        #ifdef DEBUG
-        Serial.print("Found ");
-        Serial.print(peripheral.address());
-        Serial.print(" '");
-        Serial.print(peripheral.localName());
-        Serial.print("' ");
-        Serial.print(peripheral.advertisedServiceUuid());
-        Serial.println();
-        #endif
-        
+        BLE.stopScan();
+
         String actualAddress = peripheral.address();
-        bool peripheralRepeted=0;
-        for(int a=0;a<nodesToRead;a++){
-           if(actualAddress.equals(addressRead[a])){
-            peripheralRepeted=1;
+        bool peripheralRepeted = 0;
+        for (int a = 0; a < nodesToRead; a++) {
+          if (actualAddress.equals(addressRead[a])) {
+            peripheralRepeted = 1;
             peripheralCounter++;
-            if(peripheralCounter==nodesToRead){
-              scanFlag=0;
-              BLE.stopScan();
+            if (peripheralCounter == nodesToRead) {
+              scanFlag = 0;
+              //BLE.stopScan();
             }
-           }
           }
+        }
         // stop scanning
-        if(!peripheralRepeted){
-          BLE.stopScan();
-          addressRead[i]=peripheral.address();
+        if (!peripheralRepeted) {
+          //BLE.stopScan();
+          addressRead[i] = peripheral.address();
           explorerPeripheral(peripheral);
           i++;
-          BLE.scan();
         }
+        BLE.scan();
       }
     }
   }
 }
 
-void zeroCrossISR(){ //8.33mS 
+void zeroCrossISR() { //8.33mS
   digitalWrite(triacOutput, LOW);
   //delayMicroseconds(4000); //Check Timeout BLE
   digitalWrite(triacOutput, HIGH);
@@ -106,44 +108,56 @@ void explorerPeripheral(BLEDevice peripheral) {
 
   if (peripheral.connect()) {
     Serial.println("Connected");
-    BLE.stopScan();
+    //BLE.stopScan();
   } else {
     Serial.println("Failed to connect!");
     return;
   }
 
   // discover peripheral attributes
-  Serial.println("Discovering attributes ...");
-  if (peripheral.discoverAttributes()) {
+  /*Serial.println("Discovering attributes ...");
+    if (peripheral.discoverAttributes()) {
     Serial.println("Attributes discovered");
-  } else {
+    } else {
     Serial.println("Attribute discovery failed!");
     peripheral.disconnect();
     return;
-  }
+    }
 
-  // read and print device name of peripheral
-  Serial.println();
-  Serial.print("Device name: ");
-  Serial.println(peripheral.deviceName());
-  Serial.print("Appearance: 0x");
-  Serial.println(peripheral.appearance(), HEX);
-  Serial.println();
+    // read and print device name of peripheral
+    Serial.println();
+    Serial.print("Device name: ");
+    Serial.println(peripheral.deviceName());
+    Serial.print("Appearance: 0x");
+    Serial.println(peripheral.appearance(), HEX);
+    Serial.println();
 
-  // loop the services of the peripheral and explore each
-  for (int i = 0; i < peripheral.serviceCount(); i++) {
+    // loop the services of the peripheral and explore each
+    //for (int i = 0; i < peripheral.serviceCount(); i++) {
     BLEService service = peripheral.service(i);
 
     exploreService(service);
-  }
+    //}
+  */
+  Serial.println("Discovering service 0xffff ...");
+  if (peripheral.discoverService("ffff")) {
+    Serial.println("Service discovered");
+     BLEService service = peripheral.service("ffff");
+    exploreService(service);
+  } else {
+    Serial.println("Attribute discovery failed.");
+    peripheral.disconnect();
 
+    while (1);
+    return;
+  }
   Serial.println();
 
   // we are done exploring, disconnect
   Serial.println("Disconnecting ...");
   peripheral.disconnect();
   Serial.println("Disconnected");
-  BLE.scan();
+  //BLE.scan();
 }
 
 void exploreService(BLEService service) {
@@ -152,11 +166,15 @@ void exploreService(BLEService service) {
   Serial.println(service.uuid());
 
   // loop the characteristics of the service and explore each
-  for (int i = 0; i < service.characteristicCount(); i++) {
+  //for (int i = 0; i < service.characteristicCount(); i++) {
     BLECharacteristic characteristic = service.characteristic(i);
+    BLECharacteristic temperatureChar = peripheral.characteristic("aaaa");
+    BLECharacteristic humidityChar = peripheral.characteristic("bbbb");
+    BLECharacteristic co2Char = peripheral.characteristic("cccc");
+    BLECharacteristic vocChar = peripheral.characteristic("dddd");
 
     exploreCharacteristic(characteristic);
-  }
+  //}
 }
 
 void exploreCharacteristic(BLECharacteristic characteristic) {
