@@ -6,6 +6,8 @@
 #define nodesToRead 5
 #define DEBUG
 
+BLEDevice peripheral;
+
 String addressRead[nodesToRead];
 int i=0;
 bool scanFlag=0;
@@ -17,8 +19,8 @@ void zeroCrossISR();
 
 void setup() {
   pinMode(triacOutput, OUTPUT);
-  pinMode(zeroCross, INPUT);
-  attachInterrupt(zeroCross, zeroCrossISR, RISING);
+  //pinMode(zeroCross, INPUT);
+  //attachInterrupt(zeroCross, zeroCrossISR, RISING);
   
   Serial.begin(115200);
   while (!Serial);
@@ -35,6 +37,7 @@ void setup() {
 
 void loop() {
   //Check every 5 min all the nodes
+  BLE.poll();
   long currentMillis = millis();
   if (currentMillis - previousMillis >= 5000) {
     Serial.println("5 seconds");
@@ -43,14 +46,15 @@ void loop() {
     for(int i=0;i<nodesToRead;i++){
         BLE.stopScan();
         addressRead[i]="";
-        BLE.scan();
+        //BLE.scan();
         scanFlag=1;
     }
+    BLE.scan();
   }
 
   if(scanFlag){
     // check if a peripheral has been discovered
-    BLEDevice peripheral = BLE.available();
+    peripheral = BLE.available();
     
     if (peripheral) {
       // see if peripheral is a LED
@@ -71,7 +75,10 @@ void loop() {
            if(actualAddress.equals(addressRead[a])){
             peripheralRepeted=1;
             peripheralCounter++;
-            if(peripheralCounter==nodesToRead)scanFlag=0;
+            if(peripheralCounter==nodesToRead){
+              scanFlag=0;
+              BLE.stopScan();
+            }
            }
           }
         // stop scanning
@@ -99,6 +106,7 @@ void explorerPeripheral(BLEDevice peripheral) {
 
   if (peripheral.connect()) {
     Serial.println("Connected");
+    BLE.stopScan();
   } else {
     Serial.println("Failed to connect!");
     return;
@@ -135,6 +143,7 @@ void explorerPeripheral(BLEDevice peripheral) {
   Serial.println("Disconnecting ...");
   peripheral.disconnect();
   Serial.println("Disconnected");
+  BLE.scan();
 }
 
 void exploreService(BLEService service) {
