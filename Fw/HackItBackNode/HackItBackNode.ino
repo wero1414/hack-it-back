@@ -10,7 +10,7 @@ SensirionI2CSgp40 sgp40;
 SensirionI2CScd4x scd4x;
 
 // Bluetooth® Low Energy Sensor Service
-BLEService sensorService("FFFF");
+BLEService sensorService("19B10001-E8F2-537E-4F6C-FFFF768A1214");
 // Bluetooth® Low Energy characteristics
 BLEFloatCharacteristic temperatureChar("AAAA",BLERead|BLENotify);
 BLEFloatCharacteristic humidityChar("BBBB",BLERead|BLENotify);
@@ -84,11 +84,6 @@ void loop() {
             if (currentMillis - previousMillis >= 5000) {
                 previousMillis = currentMillis;
                 updateSensors(&co2,&temperature,&humidity,&srawVOC);
-                // if(!readSensors(&co2,&temperature,&humidity,&srawVOC)){
-                //     //Update BLE information
-                // }else{
-                // //Error while reading 
-                // }
             }
         }
         // when the central disconnects, turn off the LED:
@@ -109,7 +104,7 @@ bool updateSensors(uint16_t* co2, float* temperature, float* humidity, uint16_t*
     char errorMessage[256];
     uint16_t defaultRh = 0x8000;
     uint16_t defaultT = 0x6666;
-    
+    uint16_t hum,temp;
     error = sgp40.measureRawSignal(defaultRh, defaultT, *srawVOC);
     if (error) {
         #ifdef DEBUG
@@ -124,10 +119,6 @@ bool updateSensors(uint16_t* co2, float* temperature, float* humidity, uint16_t*
         Serial.println(*srawVOC);
         #endif
     }
-   
-    // uint16_t co2;
-    // float temperature;
-    // float humidity;
     error = scd4x.readMeasurement(*co2, *temperature, *humidity);
     if (error) {
         #ifdef DEBUG

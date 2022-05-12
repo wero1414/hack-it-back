@@ -2,29 +2,36 @@
 
 #define zeroCross 15
 #define triacOutput 2
-
-#define nodesToRead 5
 #define DEBUG
 
-BLEDevice peripheral;
+long previousMillis,delayTime = 0;  // last time the battery level was checked, in ms
 
-String addressRead[nodesToRead];
-int i = 0;
-bool scanFlag = 0;
+union floatToInt
+{
+    int32_t intMember;
+    float floatMember; /* Float must be 32 bits IEEE 754 for this to work */
+};
 
-long previousMillis = 0;  // last time the battery level was checked, in ms
-int peripheralCounter = 0;
+float temperatureGlobal,humidityGlobal;
+uint16_t co2Global,vocGlobal;
 
+void updateDelayTime();
+void explorerPeripheral(BLEDevice);
+void exploreService(BLEService);
+void exploreCharacteristic(BLECharacteristic);
 void zeroCrossISR();
 
+
 void setup() {
-  pinMode(triacOutput, OUTPUT);
-  //pinMode(zeroCross, INPUT);
-  //attachInterrupt(zeroCross, zeroCrossISR, RISING);
-
-  Serial.begin(115200);
+  #ifdef DEBUG
+  Serial.begin(9600);
   while (!Serial);
-
+  #endif
+  
+  pinMode(triacOutput, OUTPUT);
+  pinMode(zeroCross, INPUT);
+  attachInterrupt(zeroCross, zeroCrossISR, RISING);
+  
   // begin initialization
   if (!BLE.begin()) {
     Serial.println("starting Bluetooth® Low Energy module failed!");
@@ -32,32 +39,22 @@ void setup() {
   }
 
   Serial.println("Bluetooth® Low Energy Central - Peripheral Explorer");
+
+  // start scanning for peripherals
   BLE.scan();
 }
 
 void loop() {
-  //Check every 5 min all the nodes
-  //BLE.poll();
-  long currentMillis = millis();
-  if (currentMillis - previousMillis >= 5000) {
-    Serial.println("5 seconds");
-    peripheralCounter = 0;
-    previousMillis = currentMillis;
-    for (int i = 0; i < nodesToRead; i++) {
-      //BLE.stopScan();
-      addressRead[i] = "";
-      //BLE.scan();
-      scanFlag = 1;
-    }
-    //BLE.scan();
-  }
+  // check if a peripheral has been discovered
+  BLEDevice peripheral = BLE.available();
 
-  if (scanFlag) {
-    // check if a peripheral has been discovered
-    peripheral = BLE.available();
-
-    if (peripheral) {
-#ifdef DEBUG
+  if (peripheral) {
+    // see if peripheral is a Hack it back node
+    if (peripheral.localName() == "Hack it back") {
+      // stop scanning
+      BLE.stopScan();
+      #ifdef DEBUG
+      // discovered a peripheral, print out address, local name, and advertised service
       Serial.print("Found ");
       Serial.print(peripheral.address());
       Serial.print(" '");
@@ -65,169 +62,139 @@ void loop() {
       Serial.print("' ");
       Serial.print(peripheral.advertisedServiceUuid());
       Serial.println();
-#endif
-
-      // see if peripheral is a LED
-      if (peripheral.localName() == "Hack it back") {
-        BLE.stopScan();
-
-        String actualAddress = peripheral.address();
-        bool peripheralRepeted = 0;
-        for (int a = 0; a < nodesToRead; a++) {
-          if (actualAddress.equals(addressRead[a])) {
-            peripheralRepeted = 1;
-            peripheralCounter++;
-            if (peripheralCounter == nodesToRead) {
-              scanFlag = 0;
-              //BLE.stopScan();
-            }
-          }
-        }
-        // stop scanning
-        if (!peripheralRepeted) {
-          //BLE.stopScan();
-          addressRead[i] = peripheral.address();
-          explorerPeripheral(peripheral);
-          i++;
-        }
-        BLE.scan();
-      }
+      #endif 
+      //uC get cycled once connected to one node here
+      explorerPeripheral(peripheral); 
+      BLE.scan();
     }
   }
 }
 
-void zeroCrossISR() { //8.33mS
-  digitalWrite(triacOutput, LOW);
-  //delayMicroseconds(4000); //Check Timeout BLE
-  digitalWrite(triacOutput, HIGH);
-}
-
 void explorerPeripheral(BLEDevice peripheral) {
-  // connect to the peripheral
-  Serial.println("Connecting ...");
-
   if (peripheral.connect()) {
     Serial.println("Connected");
-    //BLE.stopScan();
   } else {
     Serial.println("Failed to connect!");
     return;
   }
-
-  // discover peripheral attributes
-  /*Serial.println("Discovering attributes ...");
-    if (peripheral.discoverAttributes()) {
-    Serial.println("Attributes discovered");
-    } else {
-    Serial.println("Attribute discovery failed!");
-    peripheral.disconnect();
-    return;
-    }
-
-    // read and print device name of peripheral
-    Serial.println();
-    Serial.print("Device name: ");
-    Serial.println(peripheral.deviceName());
-    Serial.print("Appearance: 0x");
-    Serial.println(peripheral.appearance(), HEX);
-    Serial.println();
-
-    // loop the services of the peripheral and explore each
-    //for (int i = 0; i < peripheral.serviceCount(); i++) {
-    BLEService service = peripheral.service(i);
-
-    exploreService(service);
-    //}
-  */
-  Serial.println("Discovering service 0xffff ...");
-  if (peripheral.discoverService("ffff")) {
-    Serial.println("Service discovered");
-     BLEService service = peripheral.service("ffff");
-    exploreService(service);
-  } else {
-    Serial.println("Attribute discovery failed.");
-    peripheral.disconnect();
-
-    while (1);
-    return;
+  while (peripheral.connected()) {
+    long currentMillis = millis();
+    if (currentMillis - previousMillis >= 5000) {
+      previousMillis =millis();
+      if (peripheral.discoverAttributes()) {
+        Serial.println("Attributes discovered");
+      } else {
+        Serial.println("Attribute discovery failed!");
+        return;
+      }
+      BLEService service = peripheral.service(2);
+      exploreService(service);
+      updateDelayTime();
+      }
   }
-  Serial.println();
-
   // we are done exploring, disconnect
+  #ifdef DEBUG
   Serial.println("Disconnecting ...");
+  #endif
   peripheral.disconnect();
+  #ifdef DEBUG
   Serial.println("Disconnected");
-  //BLE.scan();
+  #endif
 }
 
 void exploreService(BLEService service) {
-  // print the UUID of the service
-  Serial.print("Service ");
-  Serial.println(service.uuid());
-
   // loop the characteristics of the service and explore each
-  //for (int i = 0; i < service.characteristicCount(); i++) {
+  for (int i = 0; i < service.characteristicCount(); i++) {
     BLECharacteristic characteristic = service.characteristic(i);
-    BLECharacteristic temperatureChar = peripheral.characteristic("aaaa");
-    BLECharacteristic humidityChar = peripheral.characteristic("bbbb");
-    BLECharacteristic co2Char = peripheral.characteristic("cccc");
-    BLECharacteristic vocChar = peripheral.characteristic("dddd");
-
     exploreCharacteristic(characteristic);
-  //}
+  }
 }
 
 void exploreCharacteristic(BLECharacteristic characteristic) {
-  // print the UUID and properties of the characteristic
-  Serial.print("\tCharacteristic ");
-  Serial.print(characteristic.uuid());
-  Serial.print(", properties 0x");
-  Serial.print(characteristic.properties(), HEX);
-
-  // check if the characteristic is readable
-  if (characteristic.canRead()) {
-    // read the characteristic value
-    characteristic.read();
-
-    if (characteristic.valueLength() > 0) {
-      // print out the value of the characteristic
-      Serial.print(", value 0x");
-      printData(characteristic.value(), characteristic.valueLength());
-    }
-  }
-  Serial.println();
-
-  // loop the descriptors of the characteristic and explore each
-  for (int i = 0; i < characteristic.descriptorCount(); i++) {
-    BLEDescriptor descriptor = characteristic.descriptor(i);
-
-    exploreDescriptor(descriptor);
-  }
+   const char* uuidChar = characteristic.uuid();
+   String uuidStr="";
+   for(int i=0;i<4;i++){
+     uuidStr += String(uuidChar[i]);
+   }
+  
+   if(uuidStr=="aaaa"){
+      union floatToInt temperature;
+      if (characteristic.canRead()) {
+        uint32_t value = 0;
+        // read the characteristic value
+        characteristic.read();
+        characteristic.readValue(value);
+        temperature.intMember=value;
+        temperatureGlobal=temperature.floatMember;        
+        #ifdef DEBUG
+        Serial.println("UUID de temperatura");
+        Serial.print("value es: ");
+        Serial.println(temperature.floatMember);
+        #endif
+      }
+   }
+   else if(uuidStr=="bbbb"){
+      union floatToInt humidity;
+      if (characteristic.canRead()) {
+        uint32_t value = 0;
+        // read the characteristic value
+        characteristic.read();
+        characteristic.readValue(value);
+        humidity.intMember=value;
+        humidityGlobal=humidity.floatMember;
+        #ifdef DEBUG
+        Serial.println("UUID de humedad");
+        Serial.print("value es: ");
+        Serial.println(humidity.floatMember);
+        #endif
+      }
+   }
+   else if(uuidStr=="cccc"){
+      if (characteristic.canRead()) {
+        uint32_t value = 0;
+        characteristic.read();
+        characteristic.readValue(value);
+        co2Global=value;
+        #ifdef DEBUG
+        Serial.println("UUID de co2");
+        Serial.print("value es: ");
+        Serial.println((uint16_t)value);
+        #endif
+      }
+   }
+   else if(uuidStr=="dddd"){
+      if (characteristic.canRead()) {
+        uint32_t value = 0;
+        // read the characteristic value
+        characteristic.read();
+        characteristic.readValue(value);
+        vocGlobal=value;
+        #ifdef DEBUG
+        Serial.println("UUID de voc");
+        Serial.print("value es: ");
+        Serial.println((uint16_t)value);
+        #endif
+      }
+   }
 }
 
-void exploreDescriptor(BLEDescriptor descriptor) {
-  // print the UUID of the descriptor
-  Serial.print("\t\tDescriptor ");
-  Serial.print(descriptor.uuid());
-
-  // read the descriptor value
-  descriptor.read();
-
-  // print out the value of the descriptor
-  Serial.print(", value 0x");
-  printData(descriptor.value(), descriptor.valueLength());
-
-  Serial.println();
-}
-
-void printData(const unsigned char data[], int length) {
-  for (int i = 0; i < length; i++) {
-    unsigned char b = data[i];
-
-    if (b < 16) {
-      Serial.print("0");
-    }
-
-    Serial.print(b, HEX);
+void updateDelayTime(){
+  if(temperatureGlobal>34.0 | co2Global>800 | vocGlobal > 60000)
+  delayTime=2083*0; //100% power
+  else if(temperatureGlobal>30.0 | co2Global>600 | vocGlobal > 50000)
+  delayTime=2083;   //75% power
+  else if(temperatureGlobal>25.0 | co2Global>500 | vocGlobal > 30000)
+  delayTime=4166;   //50% power
+  else if(temperatureGlobal<25.0 | co2Global<500 | vocGlobal < 30000)
+  delayTime=6249;   //25% power
+  #ifdef DEBUG
+  Serial.print("delay time");
+  Serial.println(delayTime);
+  #endif
   }
+
+void zeroCrossISR() { //8.33mS
+  digitalWrite(triacOutput, LOW);
+  delayMicroseconds(delayTime); //Check Timeout BLE
+  digitalWrite(triacOutput, HIGH);
 }
