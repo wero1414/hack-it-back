@@ -2,7 +2,7 @@
 
 #define zeroCross 15
 #define triacOutput 2
-#define DEBUG
+//#define DEBUG
 
 long previousMillis,delayTime = 0;  // last time the battery level was checked, in ms
 

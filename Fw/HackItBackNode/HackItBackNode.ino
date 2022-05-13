@@ -4,7 +4,7 @@
 #include <SensirionI2CScd4x.h>
 #include <Wire.h>
 
-#define DEBUG
+//#define DEBUG
 
 SensirionI2CSgp40 sgp40;
 SensirionI2CScd4x scd4x;
