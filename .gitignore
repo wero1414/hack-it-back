@@ -40,3 +40,5 @@ Hw/sensor-board/sensor-board-backups/
 Hw/sensor-co2/sensor-co2-backups/
 
 *.kicad_sch-bak
+
+Hw/sensor-exp/sensor-exp-backups/
